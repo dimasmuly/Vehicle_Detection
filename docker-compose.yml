@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    ports:
+      - "18554:8554"  # RTSP (ubah ke 18554)
+      - "18888:8888"  # HLS (ubah ke 18888)
+      - "18889:8889"  # WebRTC (ubah ke 18889)
+      - "19997:9997"  # API (ubah ke 19997)
+      - "11935:1935"  # RTMP (ubah ke 11935)
+    volumes:
+      - ./config/mediamtx.yml:/mediamtx.yml
+    restart: unless-stopped
+    networks:
+      - vehicle-counting-net
+
+  vehicle-counting:
+    build: .
+    container_name: vehicle-counting-service
+    depends_on:
+      - mediamtx
+    volumes:
+      - ./videos:/app/videos
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./src:/app/src
+    environment:
+      - MEDIAMTX_URL=rtmp://mediamtx:1935/live
+      - INPUT_VIDEO=/app/videos/test_video.mp4
+      - MODEL_PATH=/app/models
+      - OMP_NUM_THREADS=4
+      - STREAM_OUTPUT=true  
+    restart: unless-stopped
+    networks:
+      - vehicle-counting-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+networks:
+  vehicle-counting-net:
+    driver: bridge

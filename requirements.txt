@@ -1,0 +1,9 @@
+opencv-python
+numpy
+requests
+aiofiles
+fastapi
+uvicorn
+Pillow
+openvino>=2023.0.0
+psutil

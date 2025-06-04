@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Counting Stream</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .video-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .status-connecting { color: orange; }
+        .status-connected { color: green; }
+        .status-error { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vehicle Counting Live Stream</h1>
+        
+        <div class="info">
+            <h3>Stream Information:</h3>
+            <p><strong>HLS URL:</strong> http://localhost:8888/live/index.m3u8</p>
+            <p><strong>RTSP URL:</strong> rtsp://localhost:8554/live</p>
+            <p><strong>Status:</strong> <span id="status" class="status-connecting">Connecting...</span></p>
+            <p><strong>Retry Count:</strong> <span id="retryCount">0</span></p>
+        </div>
+        
+        <div class="video-container">
+            <video id="videoPlayer" controls autoplay muted>
+                <source src="http://localhost:8888/live/index.m3u8" type="application/x-mpegURL">
+                Your browser does not support the video tag or HLS streaming.
+            </video>
+        </div>
+        
+        <div class="controls">
+            <button onclick="reloadStream()">Reload Stream</button>
+            <button onclick="toggleFullscreen()">Fullscreen</button>
+            <button onclick="checkStreamStatus()">Check Status</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        const video = document.getElementById('videoPlayer');
+        const status = document.getElementById('status');
+        const retryCountElement = document.getElementById('retryCount');
+        let hls;
+        let retryCount = 0;
+        let maxRetries = 10;
+        let retryInterval;
+        
+        function updateStatus(message, className) {
+            status.textContent = message;
+            status.className = className;
+        }
+        
+        function initializePlayer() {
+            if (hls) {
+                hls.destroy();
+            }
+            
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90
+                });
+                
+                hls.loadSource('http://localhost:8888/live/index.m3u8');
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    updateStatus('Connected', 'status-connected');
+                    retryCount = 0;
+                    retryCountElement.textContent = retryCount;
+                    clearInterval(retryInterval);
+                });
+                
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.error('HLS Error:', data);
+                    if (data.fatal) {
+                        updateStatus('Connection Error - Retrying...', 'status-error');
+                        scheduleRetry();
+                    }
+                });
+                
+                video.addEventListener('loadstart', function() {
+                    updateStatus('Loading...', 'status-connecting');
+                });
+                
+                video.addEventListener('canplay', function() {
+                    updateStatus('Ready to play', 'status-connected');
+                });
+                
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = 'http://localhost:8888/live/index.m3u8';
+                video.addEventListener('loadedmetadata', function() {
+                    updateStatus('Connected (Native HLS)', 'status-connected');
+                });
+                video.addEventListener('error', function() {
+                    updateStatus('Connection Error - Retrying...', 'status-error');
+                    scheduleRetry();
+                });
+            } else {
+                updateStatus('HLS not supported in this browser', 'status-error');
+            }
+        }
+        
+        function scheduleRetry() {
+            if (retryCount < maxRetries) {
+                retryCount++;
+                retryCountElement.textContent = retryCount;
+                updateStatus(`Retrying in 3 seconds... (${retryCount}/${maxRetries})`, 'status-connecting');
+                
+                setTimeout(() => {
+                    initializePlayer();
+                }, 3000);
+            } else {
+                updateStatus('Max retries reached. Please check if services are running.', 'status-error');
+            }
+        }
+        
+        function reloadStream() {
+            retryCount = 0;
+            retryCountElement.textContent = retryCount;
+            updateStatus('Reconnecting...', 'status-connecting');
+            clearInterval(retryInterval);
+            initializePlayer();
+        }
+        
+        function toggleFullscreen() {
+            if (video.requestFullscreen) {
+                video.requestFullscreen();
+            } else if (video.webkitRequestFullscreen) {
+                video.webkitRequestFullscreen();
+            } else if (video.msRequestFullscreen) {
+                video.msRequestFullscreen();
+            }
+        }
+        
+        async function checkStreamStatus() {
+            try {
+                const response = await fetch('http://localhost:9997/v3/paths/list');
+                const data = await response.json();
+                console.log('MediaMTX Paths:', data);
+                
+                if (data.items && data.items.some(item => item.name === 'live')) {
+                    updateStatus('Stream is available on MediaMTX', 'status-connected');
+                } else {
+                    updateStatus('No active stream found on MediaMTX', 'status-error');
+                }
+            } catch (error) {
+                console.error('Failed to check stream status:', error);
+                updateStatus('Cannot connect to MediaMTX API', 'status-error');
+            }
+        }
+        
+        // Initialize player when page loads
+        setTimeout(() => {
+            initializePlayer();
+        }, 2000); // Wait 2 seconds before first attempt
+        
+        // Auto-retry every 10 seconds if not connected
+        retryInterval = setInterval(() => {
+            if (status.className === 'status-error' && retryCount < maxRetries) {
+                scheduleRetry();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

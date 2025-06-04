@@ -1,0 +1,34 @@
+# MediaMTX configuration
+logLevel: info
+logDestinations: [stdout]
+
+# API configuration
+api: yes
+apiAddress: 0.0.0.0:9997
+
+# RTSP configuration
+rtspAddress: 0.0.0.0:8554
+
+# RTMP configuration
+rtmpAddress: 0.0.0.0:1935
+
+# HLS configuration
+hlsAddress: 0.0.0.0:8888
+hls: yes
+hlsVariant: lowLatency
+hlsSegmentCount: 3
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+hlsAllowOrigin: '*'
+hlsTrustedProxies: []
+hlsDirectory: ''
+
+# WebRTC configuration
+webrtcAddress: 0.0.0.0:8889
+webrtcAllowOrigin: '*'
+
+# Path configuration
+paths:
+  live:
+    source: publisher
