@@ -145,8 +145,5 @@ A video demonstration of the system is available in the repository as `Documenta
    - Check model paths in `config/config.json`
    - Run `./scripts/download_models.sh` to re-download models
 
-## License
-
-[Add your license information here]
 
         
